@@ -82,7 +82,7 @@ async function createSupportChannel(interaction) {
         ]
       },
       {
-        id: botMember.id,
+        id: client.user.id,
         allow: [
           PermissionFlagsBits.ViewChannel,
           PermissionFlagsBits.SendMessages,
