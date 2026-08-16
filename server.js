@@ -63,7 +63,6 @@ async function createSupportChannel(interaction) {
     .slice(0, 20);
 
   const guild = await client.guilds.fetch(GUILD_ID);
-  
 
   const channel = await guild.channels.create({
     name: `ticket-${safeName}`,
@@ -79,15 +78,6 @@ async function createSupportChannel(interaction) {
           PermissionFlagsBits.ViewChannel,
           PermissionFlagsBits.SendMessages,
           PermissionFlagsBits.ReadMessageHistory
-        ]
-      },
-      {
-        id: client.user.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.ManageChannels
         ]
       }
     ]
@@ -179,19 +169,18 @@ app.post(
       }
 
       return res.send(interactionReply("Comando no reconocido."));
-    
     } catch (error) {
-  console.error("ERROR MOED:", error);
+      console.error("ERROR MOED:", error);
 
-  const details =
-    error?.message ||
-    error?.rawError?.message ||
-    JSON.stringify(error);
+      const details =
+        error?.message ||
+        error?.rawError?.message ||
+        JSON.stringify(error);
 
-  return res.send(
-    interactionReply(`Error real del bot: ${details.slice(0, 1500)}`)
-  );
-}
+      return res.send(
+        interactionReply(`Error real del bot: ${details.slice(0, 1500)}`)
+      );
+    }
   }
 );
 
