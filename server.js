@@ -48,6 +48,11 @@ client.on("messageCreate", async (message) => {
 
 async function createSupportChannel(interaction) {
   const userId = interaction.member?.user?.id || interaction.user?.id;
+
+  if (!userId) {
+    throw new Error("No pude detectar el usuario que abrió el ticket.");
+  }
+
   const username =
     interaction.member?.user?.username ||
     interaction.user?.username ||
@@ -59,6 +64,7 @@ async function createSupportChannel(interaction) {
     .slice(0, 20);
 
   const guild = await client.guilds.fetch(GUILD_ID);
+  const botMember = await guild.members.fetchMe();
 
   const channel = await guild.channels.create({
     name: `ticket-${safeName}`,
@@ -66,7 +72,7 @@ async function createSupportChannel(interaction) {
     parent: SUPPORT_CATEGORY_ID,
     permissionOverwrites: [
       {
-        id: GUILD_ID,
+        id: guild.roles.everyone.id,
         deny: [PermissionFlagsBits.ViewChannel]
       },
       {
@@ -78,7 +84,7 @@ async function createSupportChannel(interaction) {
         ]
       },
       {
-        id: client.user.id,
+        id: botMember.id,
         allow: [
           PermissionFlagsBits.ViewChannel,
           PermissionFlagsBits.SendMessages,
