@@ -1,5 +1,11 @@
 import express from "express";
 import {
+  Client,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+  ChannelType
+} from "discord.js";
+import {
   InteractionResponseType,
   InteractionType,
   verifyKeyMiddleware
@@ -13,7 +19,49 @@ const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const SUPPORT_CATEGORY_ID = process.env.SUPPORT_CATEGORY_ID;
 
-const DISCORD_API = "https://discord.com/api/v10";
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
+
+client.once("ready", () => {
+  console.log(`Discord conectado como ${client.user.tag}`);
+});
+
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+  if (!message.channel?.name?.startsWith("ticket-")) return;
+
+  const text = message.content.trim();
+  if (!text) return;
+
+  await message.channel.sendTyping();
+
+  const reply = buildMoedReply(text);
+
+  await message.reply(reply);
+});
+
+function buildMoedReply(text) {
+  const lower = text.toLowerCase();
+
+  if (lower.includes("precio") || lower.includes("cuesta")) {
+    return "Hola, soy la IA de atención al cliente de MOED. Para precios, dime qué producto o servicio quieres y te ayudo.";
+  }
+
+  if (lower.includes("error") || lower.includes("problema") || lower.includes("falla")) {
+    return "Entiendo. Cuéntame qué error te sale, en qué pantalla ocurre y si puedes manda una captura.";
+  }
+
+  if (lower.includes("hola") || lower.includes("buenas")) {
+    return "Hola, soy la IA de atención al cliente de MOED. ¿En qué puedo ayudarte?";
+  }
+
+  return `Soy la IA de atención al cliente de MOED. He recibido tu mensaje: "${text}". Dime más detalles para poder ayudarte.`;
+}
 
 async function createSupportChannel(interaction) {
   const userId = interaction.member?.user?.id || interaction.user?.id;
@@ -22,44 +70,47 @@ async function createSupportChannel(interaction) {
     interaction.user?.username ||
     "cliente";
 
-  const safeName = username.toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 20);
+  const safeName = username
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .slice(0, 20);
 
-  const response = await fetch(`${DISCORD_API}/guilds/${GUILD_ID}/channels`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bot ${BOT_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      name: `ticket-${safeName}`,
-      type: 0,
-      parent_id: SUPPORT_CATEGORY_ID,
-      permission_overwrites: [
-        {
-          id: GUILD_ID,
-          type: 0,
-          deny: "68608"
-        },
-        {
-          id: userId,
-          type: 1,
-          allow: "68608"
-        },
-        {
-          id: interaction.application_id,
-          type: 1,
-          allow: "68608"
-        }
-      ]
-    })
+  const guild = await client.guilds.fetch(GUILD_ID);
+
+  const channel = await guild.channels.create({
+    name: `ticket-${safeName}`,
+    type: ChannelType.GuildText,
+    parent: SUPPORT_CATEGORY_ID,
+    permissionOverwrites: [
+      {
+        id: GUILD_ID,
+        deny: [PermissionFlagsBits.ViewChannel]
+      },
+      {
+        id: userId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory
+        ]
+      },
+      {
+        id: client.user.id,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.ManageChannels
+        ]
+      }
+    ]
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text);
-  }
+  await channel.send(
+    `<@${userId}> Hola, soy la IA de atención al cliente de MOED. Escríbeme tu duda aquí.`
+  );
 
-  return response.json();
+  return channel;
 }
 
 app.post(
@@ -87,10 +138,13 @@ app.post(
             }
           });
         } catch (error) {
+          console.error("Error creando ticket:", error);
+
           return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              content: "No he podido crear el ticket. Revisa que el bot tenga permiso de Gestionar canales.",
+              content:
+                "No he podido crear el ticket. Revisa que el bot tenga permiso de Gestionar canales.",
               flags: 64
             }
           });
@@ -99,12 +153,13 @@ app.post(
 
       if (name === "ia") {
         const mensaje =
-          interaction.data.options?.find((o) => o.name === "mensaje")?.value || "";
+          interaction.data.options?.find((o) => o.name === "mensaje")?.value ||
+          "";
 
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: `IA MOED: ${mensaje}`
+            content: buildMoedReply(mensaje)
           }
         });
       }
@@ -113,7 +168,8 @@ app.post(
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: "Comandos disponibles: /soporte, /ia, /ayuda, /limpiar, /parar"
+            content:
+              "Comandos disponibles: /soporte, /ia, /ayuda, /limpiar, /parar"
           }
         });
       }
@@ -149,6 +205,8 @@ app.post(
 app.get("/", (req, res) => {
   res.send("Bot de Discord funcionando.");
 });
+
+client.login(BOT_TOKEN);
 
 app.listen(PORT, () => {
   console.log(`Bot escuchando en puerto ${PORT}`);
