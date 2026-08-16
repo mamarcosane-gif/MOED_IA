@@ -10,6 +10,8 @@ import {
   InteractionType,
   verifyKeyMiddleware
 } from "discord-interactions";
+import { buildMoedReply } from "./moed-info.js";
+import { listGuildRoles, setMode, getUserMode, clearUserMode } from "./roles.js";
 
 const app = express();
 
@@ -38,30 +40,11 @@ client.on("messageCreate", async (message) => {
   const text = message.content.trim();
   if (!text) return;
 
+  const mode = getUserMode(message.author.id);
+
   await message.channel.sendTyping();
-
-  const reply = buildMoedReply(text);
-
-  await message.reply(reply);
+  await message.reply(buildMoedReply(text, mode));
 });
-
-function buildMoedReply(text) {
-  const lower = text.toLowerCase();
-
-  if (lower.includes("precio") || lower.includes("cuesta")) {
-    return "Hola, soy la IA de atención al cliente de MOED. Para precios, dime qué producto o servicio quieres y te ayudo.";
-  }
-
-  if (lower.includes("error") || lower.includes("problema") || lower.includes("falla")) {
-    return "Entiendo. Cuéntame qué error te sale, en qué pantalla ocurre y si puedes manda una captura.";
-  }
-
-  if (lower.includes("hola") || lower.includes("buenas")) {
-    return "Hola, soy la IA de atención al cliente de MOED. ¿En qué puedo ayudarte?";
-  }
-
-  return `Soy la IA de atención al cliente de MOED. He recibido tu mensaje: "${text}". Dime más detalles para poder ayudarte.`;
-}
 
 async function createSupportChannel(interaction) {
   const userId = interaction.member?.user?.id || interaction.user?.id;
@@ -107,10 +90,20 @@ async function createSupportChannel(interaction) {
   });
 
   await channel.send(
-    `<@${userId}> Hola, soy la IA de atención al cliente de MOED. Escríbeme tu duda aquí.`
+    `<@${userId}> Hola, soy la IA de atención al cliente de MOED.\n\nUsa /modo para elegir visitante, trabajador o moderador. Si no eliges nada, estarás en visitante.`
   );
 
   return channel;
+}
+
+function interactionReply(content, ephemeral = true) {
+  return {
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content,
+      flags: ephemeral ? 64 : undefined
+    }
+  };
 }
 
 app.post(
@@ -123,82 +116,60 @@ app.post(
       return res.send({ type: InteractionResponseType.PONG });
     }
 
-    if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-      const name = interaction.data.name;
+    if (interaction.type !== InteractionType.APPLICATION_COMMAND) {
+      return res.send(interactionReply("Interacción no reconocida."));
+    }
 
+    const name = interaction.data.name;
+
+    try {
       if (name === "soporte") {
-        try {
-          const channel = await createSupportChannel(interaction);
+        const channel = await createSupportChannel(interaction);
+        return res.send(interactionReply(`He creado tu chat privado: <#${channel.id}>`));
+      }
 
-          return res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-              content: `He creado tu chat privado: <#${channel.id}>`,
-              flags: 64
-            }
-          });
-        } catch (error) {
-          console.error("Error creando ticket:", error);
+      if (name === "roles") {
+        const rolesText = await listGuildRoles(client, GUILD_ID);
+        return res.send(interactionReply(`Roles del servidor:\n\n${rolesText || "No encontré roles."}`));
+      }
 
-          return res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-              content:
-                "No he podido crear el ticket. Revisa que el bot tenga permiso de Gestionar canales.",
-              flags: 64
-            }
-          });
-        }
+      if (name === "modo") {
+        const result = await setMode(interaction);
+        return res.send(interactionReply(result));
       }
 
       if (name === "ia") {
+        const userId = interaction.member?.user?.id || interaction.user?.id;
+        const mode = getUserMode(userId);
         const mensaje =
-          interaction.data.options?.find((o) => o.name === "mensaje")?.value ||
-          "";
+          interaction.data.options?.find((o) => o.name === "mensaje")?.value || "";
 
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: buildMoedReply(mensaje)
-          }
-        });
+        return res.send(interactionReply(buildMoedReply(mensaje, mode), false));
       }
 
       if (name === "ayuda") {
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content:
-              "Comandos disponibles: /soporte, /ia, /ayuda, /limpiar, /parar"
-          }
-        });
+        return res.send(
+          interactionReply(
+            "Comandos: /soporte, /roles, /modo, /ia, /ayuda, /limpiar, /parar"
+          )
+        );
       }
 
       if (name === "limpiar") {
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: "Conversación limpiada."
-          }
-        });
+        const userId = interaction.member?.user?.id || interaction.user?.id;
+        clearUserMode(userId);
+        return res.send(interactionReply("Conversación limpiada. Modo visitante activado."));
       }
 
       if (name === "parar") {
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: "IA parada."
-          }
-        });
+        return res.send(interactionReply("IA parada para esta conversación."));
       }
-    }
 
-    return res.send({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        content: "Comando no reconocido."
-      }
-    });
+      return res.send(interactionReply("Comando no reconocido."));
+    } catch (error) {
+      console.error(error);
+      return res.send(interactionReply("Ha ocurrido un error en el bot. Revisa los logs de Render."));
+    }
   }
 );
 
