@@ -1,9 +1,7 @@
 import express from "express";
 import {
   Client,
-  GatewayIntentBits,
-  PermissionFlagsBits,
-  ChannelType
+  GatewayIntentBits
 } from "discord.js";
 import {
   InteractionResponseType,
@@ -19,6 +17,7 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
+const DISCORD_API = "https://discord.com/api/v10";
 
 const client = new Client({
   intents: [
@@ -62,30 +61,51 @@ async function createSupportChannel(interaction) {
     .replace(/[^a-z0-9-]/g, "-")
     .slice(0, 20);
 
-  const guild = await client.guilds.fetch(GUILD_ID);
-
-  const channel = await guild.channels.create({
-    name: `ticket-${safeName}`,
-    type: ChannelType.GuildText,
-    permissionOverwrites: [
-      {
-        id: guild.roles.everyone.id,
-        deny: [PermissionFlagsBits.ViewChannel]
-      },
-      {
-        id: userId,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory
-        ]
-      }
-    ]
+  const response = await fetch(`${DISCORD_API}/guilds/${GUILD_ID}/channels`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${BOT_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name: `ticket-${safeName}`,
+      type: 0,
+      permission_overwrites: [
+        {
+          id: GUILD_ID,
+          type: 0,
+          deny: "1024"
+        },
+        {
+          id: userId,
+          type: 1,
+          allow: "68608"
+        },
+        {
+          id: client.user.id,
+          type: 1,
+          allow: "68624"
+        }
+      ]
+    })
   });
 
-  await channel.send(
-    `<@${userId}> Hola, soy la IA de atención al cliente de MOED.\n\nUsa /moed-modo para elegir visitante, trabajador o moderador. Si no eliges nada, estarás en visitante.`
-  );
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const channel = await response.json();
+
+  await fetch(`${DISCORD_API}/channels/${channel.id}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bot ${BOT_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      content: `<@${userId}> Hola, soy la IA de atención al cliente de MOED.\n\nUsa /moed-modo para elegir visitante, trabajador o moderador. Si no eliges nada, estarás en visitante.`
+    })
+  });
 
   return channel;
 }
