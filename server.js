@@ -19,7 +19,6 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
-const SUPPORT_CATEGORY_ID = process.env.SUPPORT_CATEGORY_ID;
 
 const client = new Client({
   intents: [
@@ -69,7 +68,6 @@ async function createSupportChannel(interaction) {
   const channel = await guild.channels.create({
     name: `ticket-${safeName}`,
     type: ChannelType.GuildText,
-    parent: SUPPORT_CATEGORY_ID,
     permissionOverwrites: [
       {
         id: guild.roles.everyone.id,
