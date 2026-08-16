@@ -179,12 +179,19 @@ app.post(
       }
 
       return res.send(interactionReply("Comando no reconocido."));
+    
     } catch (error) {
-      console.error(error);
-      return res.send(
-        interactionReply("Ha ocurrido un error en el bot. Revisa los logs de Render.")
-      );
-    }
+  console.error("ERROR MOED:", error);
+
+  const details =
+    error?.message ||
+    error?.rawError?.message ||
+    JSON.stringify(error);
+
+  return res.send(
+    interactionReply(`Error real del bot: ${details.slice(0, 1500)}`)
+  );
+}
   }
 );
 
