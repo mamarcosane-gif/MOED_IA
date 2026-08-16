@@ -1,5 +1,3 @@
-const userModes = new Map();
-
 export async function listGuildRoles(client, guildId) {
   const guild = await client.guilds.fetch(guildId);
   const roles = await guild.roles.fetch();
@@ -11,54 +9,53 @@ export async function listGuildRoles(client, guildId) {
     .join("\n");
 }
 
+function hasRole(memberRoles, roleId) {
+  if (!roleId) return false;
+
+  if (Array.isArray(memberRoles)) {
+    return memberRoles.includes(roleId);
+  }
+
+  if (memberRoles?.cache) {
+    return memberRoles.cache.has(roleId);
+  }
+
+  return false;
+}
+
+export function detectUserModeFromInteraction(interaction) {
+  const roles = interaction.member?.roles || [];
+
+  if (hasRole(roles, process.env.MODERATOR_ROLE_ID)) {
+    return "moderador";
+  }
+
+  if (hasRole(roles, process.env.WORKER_ROLE_ID)) {
+    return "trabajador";
+  }
+
+  return "visitante";
+}
+
+export function detectUserModeFromMessage(message) {
+  const roles = message.member?.roles;
+
+  if (hasRole(roles, process.env.MODERATOR_ROLE_ID)) {
+    return "moderador";
+  }
+
+  if (hasRole(roles, process.env.WORKER_ROLE_ID)) {
+    return "trabajador";
+  }
+
+  return "visitante";
+}
+
 export async function setMode(interaction) {
-  const userId = interaction.member?.user?.id || interaction.user?.id;
-  const memberRoles = interaction.member?.roles || [];
-  const selectedRole = interaction.data.options?.find((o) => o.name === "rol")?.value;
-  const pin = interaction.data.options?.find((o) => o.name === "pin")?.value;
-
-  if (selectedRole === "visitante") {
-    userModes.set(userId, "visitante");
-    return "Modo visitante activado. No necesita verificación.";
-  }
-
-  if (selectedRole === "trabajador") {
-    if (!process.env.WORKER_PIN) {
-      return "Falta configurar WORKER_PIN en Render.";
-    }
-
-    if (pin !== process.env.WORKER_PIN) {
-      return "PIN de trabajador incorrecto.";
-    }
-
-    userModes.set(userId, "trabajador");
-    return "Modo trabajador activado.";
-  }
-
-  if (selectedRole === "moderador") {
-    if (!process.env.MODERATOR_ROLE_ID) {
-      return "Falta configurar MODERATOR_ROLE_ID en Render. Usa /roles para ver el ID del rol Moderador.";
-    }
-
-    const hasRole = Array.isArray(memberRoles)
-      ? memberRoles.includes(process.env.MODERATOR_ROLE_ID)
-      : memberRoles.cache?.has(process.env.MODERATOR_ROLE_ID);
-
-    if (!hasRole) {
-      return "No tienes el rol Moderador.";
-    }
-
-    userModes.set(userId, "moderador");
-    return "Modo moderador activado.";
-  }
-
-  return "Rol no reconocido.";
+  const mode = detectUserModeFromInteraction(interaction);
+  return `Tu modo se detecta automaticamente por tus roles. Ahora estas en modo ${mode}.`;
 }
 
-export function getUserMode(userId) {
-  return userModes.get(userId) || "visitante";
-}
-
-export function clearUserMode(userId) {
-  userModes.set(userId, "visitante");
+export function clearUserMode() {
+  return;
 }
