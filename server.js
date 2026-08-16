@@ -20,6 +20,7 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
+const SUPPORT_ROLE_ID = process.env.SUPPORT_ROLE_ID;
 const DISCORD_API = "https://discord.com/api/v10";
 
 const client = new Client({
@@ -64,6 +65,32 @@ async function createSupportChannel(interaction) {
     .replace(/[^a-z0-9-]/g, "-")
     .slice(0, 20);
 
+  const permissionOverwrites = [
+    {
+      id: GUILD_ID,
+      type: 0,
+      deny: "1024"
+    },
+    {
+      id: userId,
+      type: 1,
+      allow: "68608"
+    },
+    {
+      id: client.user.id,
+      type: 1,
+      allow: "68624"
+    }
+  ];
+
+  if (SUPPORT_ROLE_ID) {
+    permissionOverwrites.push({
+      id: SUPPORT_ROLE_ID,
+      type: 0,
+      allow: "68608"
+    });
+  }
+
   const response = await fetch(`${DISCORD_API}/guilds/${GUILD_ID}/channels`, {
     method: "POST",
     headers: {
@@ -73,23 +100,7 @@ async function createSupportChannel(interaction) {
     body: JSON.stringify({
       name: `ticket-${safeName}`,
       type: 0,
-      permission_overwrites: [
-        {
-          id: GUILD_ID,
-          type: 0,
-          deny: "1024"
-        },
-        {
-          id: userId,
-          type: 1,
-          allow: "68608"
-        },
-        {
-          id: client.user.id,
-          type: 1,
-          allow: "68624"
-        }
-      ]
+      permission_overwrites: permissionOverwrites
     })
   });
 
