@@ -21,6 +21,7 @@ const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const SUPPORT_ROLE_ID = process.env.SUPPORT_ROLE_ID;
+const SUPPORT_CATEGORY_ID = process.env.SUPPORT_CATEGORY_ID;
 const DISCORD_API = "https://discord.com/api/v10";
 
 const client = new Client({
@@ -91,17 +92,23 @@ async function createSupportChannel(interaction) {
     });
   }
 
+  const body = {
+    name: `ticket-${safeName}`,
+    type: 0,
+    permission_overwrites: permissionOverwrites
+  };
+
+  if (SUPPORT_CATEGORY_ID) {
+    body.parent_id = SUPPORT_CATEGORY_ID;
+  }
+
   const response = await fetch(`${DISCORD_API}/guilds/${GUILD_ID}/channels`, {
     method: "POST",
     headers: {
       Authorization: `Bot ${BOT_TOKEN}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      name: `ticket-${safeName}`,
-      type: 0,
-      permission_overwrites: permissionOverwrites
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
