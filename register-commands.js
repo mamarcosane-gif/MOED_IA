@@ -1,4 +1,4 @@
-const commands = [
+const moedCommands = [
   { name: "moed-soporte", description: "Abrir un chat privado con soporte MOED" },
   { name: "moed-roles", description: "Ver los roles del servidor y sus IDs" },
   {
@@ -41,20 +41,38 @@ const commands = [
   { name: "moed-parar", description: "Parar la IA de MOED" }
 ];
 
-const response = await fetch(
-  `https://discord.com/api/v10/applications/${process.env.CLIENT_ID}/guilds/${process.env.GUILD_ID}/commands`,
-  {
+const headers = {
+  Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+  "Content-Type": "application/json"
+};
+
+async function putCommands(url, body) {
+  const response = await fetch(url, {
     method: "PUT",
-    headers: {
-      Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(commands)
+    headers,
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
   }
+
+  return response.json();
+}
+
+const appId = process.env.CLIENT_ID;
+const guildId = process.env.GUILD_ID;
+
+await putCommands(
+  `https://discord.com/api/v10/applications/${appId}/commands`,
+  []
 );
 
-if (!response.ok) {
-  throw new Error(await response.text());
-}
+console.log("Comandos globales antiguos borrados.");
+
+await putCommands(
+  `https://discord.com/api/v10/applications/${appId}/guilds/${guildId}/commands`,
+  moedCommands
+);
 
 console.log("Comandos MOED registrados.");
