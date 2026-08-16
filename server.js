@@ -1,15 +1,18 @@
 import express from "express";
-import {
-  Client,
-  GatewayIntentBits
-} from "discord.js";
+import { Client, GatewayIntentBits } from "discord.js";
 import {
   InteractionResponseType,
   InteractionType,
   verifyKeyMiddleware
 } from "discord-interactions";
 import { buildMoedReply } from "./moed-info.js";
-import { listGuildRoles, setMode, getUserMode, clearUserMode } from "./roles.js";
+import {
+  listGuildRoles,
+  setMode,
+  detectUserModeFromInteraction,
+  detectUserModeFromMessage,
+  clearUserMode
+} from "./roles.js";
 
 const app = express();
 
@@ -38,7 +41,7 @@ client.on("messageCreate", async (message) => {
   const text = message.content.trim();
   if (!text) return;
 
-  const mode = getUserMode(message.author.id);
+  const mode = detectUserModeFromMessage(message);
 
   await message.channel.sendTyping();
   await message.reply(buildMoedReply(text, mode));
@@ -48,7 +51,7 @@ async function createSupportChannel(interaction) {
   const userId = interaction.member?.user?.id || interaction.user?.id;
 
   if (!userId) {
-    throw new Error("No pude detectar el usuario que abrió el ticket.");
+    throw new Error("No pude detectar el usuario que abrio el ticket.");
   }
 
   const username =
@@ -103,7 +106,9 @@ async function createSupportChannel(interaction) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      content: `<@${userId}> Hola, soy la IA de atención al cliente de MOED.\n\nUsa /moed-modo para elegir visitante, trabajador o moderador. Si no eliges nada, estarás en visitante.`
+      content:
+        `<@${userId}> Hola, soy la IA de atencion al cliente de MOED.\n\n` +
+        `Detectare tu modo automaticamente segun tus roles: visitante, trabajador o moderador.`
     })
   });
 
@@ -131,7 +136,7 @@ app.post(
     }
 
     if (interaction.type !== InteractionType.APPLICATION_COMMAND) {
-      return res.send(interactionReply("Interacción no reconocida."));
+      return res.send(interactionReply("Interaccion no reconocida."));
     }
 
     const name = interaction.data.name;
@@ -148,7 +153,7 @@ app.post(
         const rolesText = await listGuildRoles(client, GUILD_ID);
         return res.send(
           interactionReply(
-            `Roles del servidor:\n\n${rolesText || "No encontré roles."}`
+            `Roles del servidor:\n\n${rolesText || "No encontre roles."}`
           )
         );
       }
@@ -159,8 +164,7 @@ app.post(
       }
 
       if (name === "moed-ia") {
-        const userId = interaction.member?.user?.id || interaction.user?.id;
-        const mode = getUserMode(userId);
+        const mode = detectUserModeFromInteraction(interaction);
         const mensaje =
           interaction.data.options?.find((o) => o.name === "mensaje")?.value ||
           "";
@@ -177,15 +181,12 @@ app.post(
       }
 
       if (name === "moed-limpiar") {
-        const userId = interaction.member?.user?.id || interaction.user?.id;
-        clearUserMode(userId);
-        return res.send(
-          interactionReply("Conversación limpiada. Modo visitante activado.")
-        );
+        clearUserMode();
+        return res.send(interactionReply("Conversacion limpiada."));
       }
 
       if (name === "moed-parar") {
-        return res.send(interactionReply("IA parada para esta conversación."));
+        return res.send(interactionReply("IA parada para esta conversacion."));
       }
 
       return res.send(interactionReply("Comando no reconocido."));
