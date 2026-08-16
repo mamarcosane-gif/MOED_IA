@@ -63,7 +63,7 @@ async function createSupportChannel(interaction) {
     .slice(0, 20);
 
   const guild = await client.guilds.fetch(GUILD_ID);
-  const botMember = await guild.members.fetchMe();
+  
 
   const channel = await guild.channels.create({
     name: `ticket-${safeName}`,
