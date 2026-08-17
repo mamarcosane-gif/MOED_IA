@@ -46,7 +46,7 @@ client.on("messageCreate", async (message) => {
   const mode = detectUserModeFromMessage(message);
 
   await message.channel.sendTyping();
-  await message.reply(buildMoedReply(text, mode));
+  await message.reply(await buildMoedReply(text, mode));
 });
 
 async function createSupportChannel(interaction) {
@@ -187,7 +187,9 @@ app.post(
           interaction.data.options?.find((o) => o.name === "mensaje")?.value ||
           "";
 
-        return res.send(interactionReply(buildMoedReply(mensaje, mode), false));
+        return res.send(
+          interactionReply(await buildMoedReply(mensaje, mode), false)
+        );
       }
 
       if (name === "moed-ayuda") {
