@@ -1,42 +1,77 @@
-export const moedInfo = {
-  visitante: `
-MOED es un proyecto educativo digital.
-Tiene web, contenidos, archivos, vídeos, PDFs, periódico MOED, mural, store, chat, tareas, colecciones, salas de intercambio, tokens y herramientas educativas.
-Un visitante puede pedir información general, ayuda básica y orientación para usar MOED.
-`,
+let cachedInfo = "";
+let cachedAt = 0;
 
-  trabajador: `
-Información para trabajador MOED.
-Puede recibir ayuda sobre gestión de tareas, archivos, contenido educativo, organización de materiales, atención a usuarios y funcionamiento interno básico.
-Esta información requiere PIN de trabajador.
-`,
+const CACHE_TIME_MS = 10 * 60 * 1000;
 
-  moderador: `
-Información de moderador MOED.
-Puede recibir ayuda sobre revisión de usuarios, moderación de contenido, panel de moderador, control de incidencias, soporte avanzado y gestión del entorno.
-Esta información requiere tener el rol Moderador en Discord.
-`
-};
+function cleanHtml(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-export function buildMoedReply(text, mode) {
-  const lower = text.toLowerCase();
-  const base = moedInfo[mode] || moedInfo.visitante;
+async function loadMoedInfo() {
+  const now = Date.now();
 
-  if (lower.includes("hola") || lower.includes("buenas")) {
-    return `Hola, soy la IA de atención al cliente de MOED. Estás en modo ${mode}. ¿En qué puedo ayudarte?`;
+  if (cachedInfo && now - cachedAt < CACHE_TIME_MS) {
+    return cachedInfo;
   }
 
-  if (lower.includes("precio") || lower.includes("cuesta")) {
-    return `Modo ${mode}: MOED puede tener servicios, contenidos o herramientas. Dime exactamente qué parte quieres consultar y te ayudo.`;
+  const url = process.env.MOED_URL || "https://moedweb.netlify.app";
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`No pude leer la web de MOED: ${response.status}`);
   }
 
-  if (lower.includes("error") || lower.includes("problema") || lower.includes("falla")) {
-    return `Modo ${mode}: cuéntame qué error aparece, en qué pantalla ocurre y qué estabas intentando hacer. Si puedes, manda una captura.`;
+  const html = await response.text();
+  cachedInfo = cleanHtml(html);
+  cachedAt = now;
+
+  return cachedInfo;
+}
+
+function findRelevantText(info, question) {
+  const words = question
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word.length > 3);
+
+  const sentences = info.split(/(?<=[.!?])\s+|(?=#)|(?=###)/);
+
+  const matches = sentences
+    .map((sentence) => {
+      const lower = sentence.toLowerCase();
+      const score = words.filter((word) => lower.includes(word)).length;
+      return { sentence, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map((item) => item.sentence.trim());
+
+  if (matches.length === 0) {
+    return info.slice(0, 1200);
   }
 
-  if (lower.includes("qué es moed") || lower.includes("que es moed")) {
-    return base.trim();
+  return matches.join("\n");
+}
+
+export async function buildMoedReply(text, mode) {
+  const info = await loadMoedInfo();
+  const relevant = findRelevantText(info, text);
+
+  if (mode === "moderador") {
+    return `Modo moderador. He buscado dentro de la web de MOED y esto es lo mas relacionado:\n\n${relevant}`;
   }
 
-  return `Modo ${mode}. Según la información de MOED:\n\n${base.trim()}\n\nTu mensaje: "${text}"`;
+  if (mode === "trabajador") {
+    return `Modo trabajador. He buscado dentro de la web de MOED y esto es lo mas relacionado:\n\n${relevant}`;
+  }
+
+  return `Modo visitante. He buscado dentro de la web publica de MOED y esto es lo mas relacionado:\n\n${relevant}`;
 }
